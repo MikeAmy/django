@@ -8,6 +8,7 @@ from django.db.migrations.operations import (
 from django.db.migrations.state import (
     ModelState, ProjectState, get_related_models_recursive,
 )
+from django.db.models.base import ModelBase
 from django.test import SimpleTestCase, override_settings
 from django.test.utils import isolate_apps
 from django.utils import six
@@ -1043,6 +1044,36 @@ class ModelStateTests(SimpleTestCase):
 
         state = ModelState.from_model(PrivateFieldModel)
         self.assertNotIn('order_with_respect_to', state.options)
+
+    def test_metaclass_conflict(self):
+        """
+        Test making class with complex metadata inheritance
+        """
+        new_apps = Apps(['migrations'])
+
+        class DummyMetaClass(type):
+            pass
+
+        class Mixin(six.with_metaclass(DummyMetaClass, object)):
+            mixin_attr = True
+
+        class IntermediateMetaClass(ModelBase, DummyMetaClass):
+            pass
+
+        # Create the same Model without metaclassmaker as normal.
+        class MetaclassTestModel(six.with_metaclass(IntermediateMetaClass, models.Model, Mixin)):
+            class Meta:
+                app_label = "migrations"
+                apps = new_apps
+
+        # Reset apps to be able to render __fake__ modules.
+        new_apps = Apps(['migrations'])
+        model_state = ModelState.from_model(MetaclassTestModel)
+
+        # This raises metaclass conflict if it's not done properly.
+        class_obj = model_state.render(new_apps)
+
+        self.assertEqual(getattr(class_obj, 'mixin_attr', False), True)
 
 
 class RelatedModelsTests(SimpleTestCase):
