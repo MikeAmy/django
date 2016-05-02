@@ -9,15 +9,18 @@ from django.db.models.fields import NOT_PROVIDED
 from django.db.transaction import atomic
 from django.db.utils import IntegrityError
 from django.test import override_settings, skipUnlessDBFeature
-from django.utils import six
 
-from .models import FoodManager, FoodQuerySet
+from .models import FoodManager, FoodQuerySet, UnicodeModel
 from .test_base import MigrationTestBase
 
 try:
     import sqlparse
 except ImportError:
     sqlparse = None
+
+
+class Mixin(object):
+    pass
 
 
 class OperationTestBase(MigrationTestBase):
@@ -47,7 +50,8 @@ class OperationTestBase(MigrationTestBase):
         operation.state_forwards(app_label, new_state)
         return project_state, new_state
 
-    def set_up_test_model(self, app_label, second_model=False, third_model=False,
+    def set_up_test_model(
+            self, app_label, second_model=False, third_model=False,
             related_model=False, mti_model=False, proxy_model=False, manager_model=False,
             unique_together=False, options=False, db_table=None, index_together=False):
         """
@@ -123,6 +127,7 @@ class OperationTestBase(MigrationTestBase):
                         'Pony',
                         models.CASCADE,
                         auto_created=True,
+                        parent_link=True,
                         primary_key=True,
                         to_field='id',
                         serialize=False,
@@ -198,6 +203,76 @@ class OperationTests(OperationTestBase):
         operation = migrations.CreateModel("Foo", fields=[], managers=[("objects", models.Manager())])
         definition = operation.deconstruct()
         self.assertNotIn('managers', definition[2])
+
+    def test_create_model_with_duplicate_field_name(self):
+        with self.assertRaisesMessage(ValueError, 'Found duplicate value pink in CreateModel fields argument.'):
+            migrations.CreateModel(
+                "Pony",
+                [
+                    ("id", models.AutoField(primary_key=True)),
+                    ("pink", models.TextField()),
+                    ("pink", models.IntegerField(default=1)),
+                ],
+            )
+
+    def test_create_model_with_duplicate_base(self):
+        message = 'Found duplicate value test_crmo.pony in CreateModel bases argument.'
+        with self.assertRaisesMessage(ValueError, message):
+            migrations.CreateModel(
+                "Pony",
+                fields=[],
+                bases=("test_crmo.Pony", "test_crmo.Pony",),
+            )
+        with self.assertRaisesMessage(ValueError, message):
+            migrations.CreateModel(
+                "Pony",
+                fields=[],
+                bases=("test_crmo.Pony", "test_crmo.pony",),
+            )
+        message = 'Found duplicate value migrations.unicodemodel in CreateModel bases argument.'
+        with self.assertRaisesMessage(ValueError, message):
+            migrations.CreateModel(
+                "Pony",
+                fields=[],
+                bases=(UnicodeModel, UnicodeModel,),
+            )
+        with self.assertRaisesMessage(ValueError, message):
+            migrations.CreateModel(
+                "Pony",
+                fields=[],
+                bases=(UnicodeModel, 'migrations.unicodemodel',),
+            )
+        with self.assertRaisesMessage(ValueError, message):
+            migrations.CreateModel(
+                "Pony",
+                fields=[],
+                bases=(UnicodeModel, 'migrations.UnicodeModel',),
+            )
+        message = "Found duplicate value <class 'django.db.models.base.Model'> in CreateModel bases argument."
+        with self.assertRaisesMessage(ValueError, message):
+            migrations.CreateModel(
+                "Pony",
+                fields=[],
+                bases=(models.Model, models.Model,),
+            )
+        message = "Found duplicate value <class 'migrations.test_operations.Mixin'> in CreateModel bases argument."
+        with self.assertRaisesMessage(ValueError, message):
+            migrations.CreateModel(
+                "Pony",
+                fields=[],
+                bases=(Mixin, Mixin,),
+            )
+
+    def test_create_model_with_duplicate_manager_name(self):
+        with self.assertRaisesMessage(ValueError, 'Found duplicate value objects in CreateModel managers argument.'):
+            migrations.CreateModel(
+                "Pony",
+                fields=[],
+                managers=[
+                    ("objects", models.Manager()),
+                    ("objects", models.Manager()),
+                ],
+            )
 
     def test_create_model_with_unique_after(self):
         """
@@ -583,6 +658,7 @@ class OperationTests(OperationTestBase):
 
         project_state = self.apply_operations(app_label, ProjectState(), operations=[
             migrations.CreateModel("ReflexivePony", fields=[
+                ("id", models.AutoField(primary_key=True)),
                 ("ponies", models.ManyToManyField("self")),
             ]),
         ])
@@ -596,8 +672,11 @@ class OperationTests(OperationTestBase):
     def test_rename_model_with_m2m(self):
         app_label = "test_rename_model_with_m2m"
         project_state = self.apply_operations(app_label, ProjectState(), operations=[
-            migrations.CreateModel("Rider", fields=[]),
+            migrations.CreateModel("Rider", fields=[
+                ("id", models.AutoField(primary_key=True)),
+            ]),
             migrations.CreateModel("Pony", fields=[
+                ("id", models.AutoField(primary_key=True)),
                 ("riders", models.ManyToManyField("Rider")),
             ]),
         ])
@@ -622,8 +701,11 @@ class OperationTests(OperationTestBase):
     def test_rename_m2m_target_model(self):
         app_label = "test_rename_m2m_target_model"
         project_state = self.apply_operations(app_label, ProjectState(), operations=[
-            migrations.CreateModel("Rider", fields=[]),
+            migrations.CreateModel("Rider", fields=[
+                ("id", models.AutoField(primary_key=True)),
+            ]),
             migrations.CreateModel("Pony", fields=[
+                ("id", models.AutoField(primary_key=True)),
                 ("riders", models.ManyToManyField("Rider")),
             ]),
         ])
@@ -1532,6 +1614,10 @@ class OperationTests(OperationTestBase):
         self.assertEqual(definition[0], "RunSQL")
         self.assertEqual(definition[1], [])
         self.assertEqual(sorted(definition[2]), ["reverse_sql", "sql", "state_operations"])
+        # And elidable reduction
+        self.assertIs(False, operation.reduce(operation, []))
+        elidable_operation = migrations.RunSQL('SELECT 1 FROM void;', elidable=True)
+        self.assertEqual(elidable_operation.reduce(operation, []), [operation])
 
     def test_run_sql_params(self):
         """
@@ -1603,16 +1689,12 @@ class OperationTests(OperationTestBase):
         )
 
         with connection.schema_editor() as editor:
-            six.assertRaisesRegex(self, ValueError,
-                "Expected a 2-tuple but got 1",
-                operation.database_forwards,
-                "test_runsql", editor, project_state, new_state)
+            with self.assertRaisesMessage(ValueError, "Expected a 2-tuple but got 1"):
+                operation.database_forwards("test_runsql", editor, project_state, new_state)
 
         with connection.schema_editor() as editor:
-            six.assertRaisesRegex(self, ValueError,
-                "Expected a 2-tuple but got 3",
-                operation.database_backwards,
-                "test_runsql", editor, new_state, project_state)
+            with self.assertRaisesMessage(ValueError, "Expected a 2-tuple but got 3"):
+                operation.database_backwards("test_runsql", editor, new_state, project_state)
 
     def test_run_sql_noop(self):
         """
@@ -1705,6 +1787,10 @@ class OperationTests(OperationTestBase):
             operation.database_forwards("test_runpython", editor, project_state, new_state)
         self.assertEqual(project_state.apps.get_model("test_runpython", "Pony").objects.count(), 6)
         self.assertEqual(project_state.apps.get_model("test_runpython", "ShetlandPony").objects.count(), 2)
+        # And elidable reduction
+        self.assertIs(False, operation.reduce(operation, []))
+        elidable_operation = migrations.RunPython(inner_method, elidable=True)
+        self.assertEqual(elidable_operation.reduce(operation, []), [operation])
 
     def test_run_python_atomic(self):
         """

@@ -4,6 +4,7 @@ from django.db import models
 from django.db.models import signals
 from django.dispatch import receiver
 from django.test import TestCase
+from django.test.utils import isolate_apps
 from django.utils import six
 
 from .models import Author, Book, Car, Person
@@ -266,9 +267,8 @@ class LazyModelRefTest(BaseSignalTest):
         self.received.append(kwargs)
 
     def test_invalid_sender_model_name(self):
-        with self.assertRaisesMessage(ValueError,
-                    "Specified sender must either be a model or a "
-                    "model name of the 'app_label.ModelName' form."):
+        msg = "Specified sender must either be a model or a model name of the 'app_label.ModelName' form."
+        with self.assertRaisesMessage(ValueError, msg):
             signals.post_init.connect(self.receiver, sender='invalid')
 
     def test_already_loaded_model(self):
@@ -285,6 +285,7 @@ class LazyModelRefTest(BaseSignalTest):
         finally:
             signals.post_init.disconnect(self.receiver, sender=Book)
 
+    @isolate_apps('signals')
     def test_not_loaded_model(self):
         signals.post_init.connect(
             self.receiver, sender='signals.Created', weak=False

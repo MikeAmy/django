@@ -1,11 +1,11 @@
 import datetime
 from operator import attrgetter
 
-from django.apps.registry import Apps
 from django.core.exceptions import FieldError
 from django.db import models
 from django.db.models.fields.related import ForeignObject
 from django.test import SimpleTestCase, TestCase, skipUnlessDBFeature
+from django.test.utils import isolate_apps
 from django.utils import translation
 
 from .models import (
@@ -57,7 +57,8 @@ class MultiColumnFKTests(TestCase):
         membership = Membership.objects.create(
             membership_country_id=self.usa.id, person_id=self.jane.id, group_id=self.cia.id)
 
-        self.assertRaises(Person.DoesNotExist, getattr, membership, 'person')
+        with self.assertRaises(Person.DoesNotExist):
+            getattr(membership, 'person')
 
     def test_reverse_query_returns_correct_result(self):
         # Creating a valid membership because it has the same country has the person
@@ -410,15 +411,13 @@ class MultiColumnFKTests(TestCase):
 
 class TestModelCheckTests(SimpleTestCase):
 
+    @isolate_apps('foreign_object')
     def test_check_composite_foreign_object(self):
-        test_apps = Apps(['foreign_object'])
-
         class Parent(models.Model):
             a = models.PositiveIntegerField()
             b = models.PositiveIntegerField()
 
             class Meta:
-                apps = test_apps
                 unique_together = (('a', 'b'),)
 
         class Child(models.Model):
@@ -433,21 +432,16 @@ class TestModelCheckTests(SimpleTestCase):
                 related_name='children',
             )
 
-            class Meta:
-                apps = test_apps
-
         self.assertEqual(Child._meta.get_field('parent').check(from_model=Child), [])
 
+    @isolate_apps('foreign_object')
     def test_check_subset_composite_foreign_object(self):
-        test_apps = Apps(['foreign_object'])
-
         class Parent(models.Model):
             a = models.PositiveIntegerField()
             b = models.PositiveIntegerField()
             c = models.PositiveIntegerField()
 
             class Meta:
-                apps = test_apps
                 unique_together = (('a', 'b'),)
 
         class Child(models.Model):
@@ -463,7 +457,17 @@ class TestModelCheckTests(SimpleTestCase):
                 related_name='children',
             )
 
-            class Meta:
-                apps = test_apps
-
         self.assertEqual(Child._meta.get_field('parent').check(from_model=Child), [])
+
+
+class TestExtraJoinFilterQ(TestCase):
+    @translation.override('fi')
+    def test_extra_join_filter_q(self):
+        a = Article.objects.create(pub_date=datetime.datetime.today())
+        ArticleTranslation.objects.create(article=a, lang='fi', title='title', body='body')
+        qs = Article.objects.all()
+        with self.assertNumQueries(2):
+            self.assertEqual(qs[0].active_translation_q.title, 'title')
+        qs = qs.select_related('active_translation_q')
+        with self.assertNumQueries(1):
+            self.assertEqual(qs[0].active_translation_q.title, 'title')

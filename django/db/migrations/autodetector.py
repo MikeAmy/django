@@ -1,6 +1,7 @@
 from __future__ import unicode_literals
 
 import datetime
+import functools
 import re
 from itertools import chain
 
@@ -38,7 +39,7 @@ class MigrationAutodetector(object):
 
     def changes(self, graph, trim_to_apps=None, convert_apps=None, migration_name=None):
         """
-        Main entry point to produce a list of appliable changes.
+        Main entry point to produce a list of applicable changes.
         Takes a graph to base names on and an optional set of apps
         to try and restrict to (restriction is not guaranteed)
         """
@@ -63,6 +64,8 @@ class MigrationAutodetector(object):
                 key: self.deep_deconstruct(value)
                 for key, value in obj.items()
             }
+        elif isinstance(obj, functools.partial):
+            return (obj.func, self.deep_deconstruct(obj.args), self.deep_deconstruct(obj.keywords))
         elif isinstance(obj, COMPILED_REGEX_TYPE):
             return RegexObject(obj)
         elif isinstance(obj, type):
@@ -215,8 +218,8 @@ class MigrationAutodetector(object):
             old_model_state = self.from_state.models[app_label, old_model_name]
             for field_name, field in old_model_state.fields:
                 old_field = self.old_apps.get_model(app_label, old_model_name)._meta.get_field(field_name)
-                if (hasattr(old_field, "remote_field") and getattr(old_field.remote_field, "through", None)
-                        and not old_field.remote_field.through._meta.auto_created):
+                if (hasattr(old_field, "remote_field") and getattr(old_field.remote_field, "through", None) and
+                        not old_field.remote_field.through._meta.auto_created):
                     through_key = (
                         old_field.remote_field.through._meta.app_label,
                         old_field.remote_field.through._meta.model_name,
@@ -509,8 +512,8 @@ class MigrationAutodetector(object):
                             related_fields[field.name] = field
                     # through will be none on M2Ms on swapped-out models;
                     # we can treat lack of through as auto_created=True, though.
-                    if (getattr(field.remote_field, "through", None)
-                            and not field.remote_field.through._meta.auto_created):
+                    if (getattr(field.remote_field, "through", None) and
+                            not field.remote_field.through._meta.auto_created):
                         related_fields[field.name] = field
             for field in model_opts.local_many_to_many:
                 if field.remote_field.model:
@@ -671,8 +674,8 @@ class MigrationAutodetector(object):
                         related_fields[field.name] = field
                     # through will be none on M2Ms on swapped-out models;
                     # we can treat lack of through as auto_created=True, though.
-                    if (getattr(field.remote_field, "through", None)
-                            and not field.remote_field.through._meta.auto_created):
+                    if (getattr(field.remote_field, "through", None) and
+                            not field.remote_field.through._meta.auto_created):
                         related_fields[field.name] = field
             for field in model._meta.local_many_to_many:
                 if field.remote_field.model:
@@ -799,8 +802,7 @@ class MigrationAutodetector(object):
         # You can't just add NOT NULL fields with no default or fields
         # which don't allow empty strings as default.
         preserve_default = True
-        if (not field.null and not field.has_default() and
-                not isinstance(field, models.ManyToManyField) and
+        if (not field.null and not field.has_default() and not field.many_to_many and
                 not (field.blank and field.empty_strings_allowed)):
             field = field.clone()
             field.default = self.questioner.ask_not_null_addition(field_name, model_name)
@@ -861,19 +863,13 @@ class MigrationAutodetector(object):
             old_field_dec = self.deep_deconstruct(old_field)
             new_field_dec = self.deep_deconstruct(new_field)
             if old_field_dec != new_field_dec:
-                both_m2m = (
-                    isinstance(old_field, models.ManyToManyField) and
-                    isinstance(new_field, models.ManyToManyField)
-                )
-                neither_m2m = (
-                    not isinstance(old_field, models.ManyToManyField) and
-                    not isinstance(new_field, models.ManyToManyField)
-                )
+                both_m2m = old_field.many_to_many and new_field.many_to_many
+                neither_m2m = not old_field.many_to_many and not new_field.many_to_many
                 if both_m2m or neither_m2m:
                     # Either both fields are m2m or neither is
                     preserve_default = True
                     if (old_field.null and not new_field.null and not new_field.has_default() and
-                            not isinstance(new_field, models.ManyToManyField)):
+                            not new_field.many_to_many):
                         field = new_field.clone()
                         new_default = self.questioner.ask_not_null_alteration(field_name, model_name)
                         if new_default is not models.NOT_PROVIDED:

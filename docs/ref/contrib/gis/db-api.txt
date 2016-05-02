@@ -8,7 +8,7 @@ Spatial Backends
 ================
 
 .. module:: django.contrib.gis.db.backends
-   :synopsis: GeoDjango's spatial database backends.
+    :synopsis: GeoDjango's spatial database backends.
 
 GeoDjango currently provides the following spatial database backends:
 
@@ -18,7 +18,7 @@ GeoDjango currently provides the following spatial database backends:
 * ``django.contrib.gis.db.backends.spatialite``
 
 .. module:: django.contrib.gis.db.models
-   :synopsis: GeoDjango's database API.
+    :synopsis: GeoDjango's database API.
 
 .. _mysql-spatial-limitations:
 
@@ -276,6 +276,7 @@ Lookup Type                        PostGIS    Oracle    MySQL [#]_   SpatiaLite
 :lookup:`equals`                   X          X         X            X
 :lookup:`exact`                    X          X         X            X
 :lookup:`intersects`               X          X         X            X
+:lookup:`isvalid`                  X
 :lookup:`overlaps`                 X          X         X            X
 :lookup:`relate`                   X          X                      X
 :lookup:`same_as`                  X          X         X            X
@@ -297,7 +298,7 @@ Database functions
 ------------------
 
 .. module:: django.contrib.gis.db.models.functions
-   :synopsis: GeoDjango's database functions.
+    :synopsis: GeoDjango's database functions.
 
 The following table provides a summary of what geography-specific database
 functions are available on each spatial backend.
@@ -318,7 +319,9 @@ Function                              PostGIS  Oracle  MySQL        SpatiaLite
 :class:`ForceRHR`                     X
 :class:`GeoHash`                      X                             X (≥ 4.0, LWGEOM)
 :class:`Intersection`                 X        X       X (≥ 5.6.1)  X
+:class:`IsValid`                      X
 :class:`Length`                       X        X       X            X
+:class:`MakeValid`                    X
 :class:`MemSize`                      X
 :class:`NumGeometries`                X        X       X            X
 :class:`NumPoints`                    X        X       X            X
@@ -360,9 +363,9 @@ Aggregate                PostGIS  Oracle  SpatiaLite
 .. [#fnmysqlidx] *See* `Creating Spatial Indexes <https://dev.mysql.com/doc/refman/5.6/en/creating-spatial-indexes.html>`_
    in the MySQL Reference Manual:
 
-       For MyISAM tables, ``SPATIAL INDEX`` creates an R-tree index. For storage
-       engines that support nonspatial indexing of spatial columns, the engine
-       creates a B-tree index. A B-tree index on spatial values will be useful
-       for exact-value lookups, but not for range scans.
+        For MyISAM tables, ``SPATIAL INDEX`` creates an R-tree index. For storage
+        engines that support nonspatial indexing of spatial columns, the engine
+        creates a B-tree index. A B-tree index on spatial values will be useful
+        for exact-value lookups, but not for range scans.
 
 .. [#] Refer :ref:`mysql-spatial-limitations` section for more details.

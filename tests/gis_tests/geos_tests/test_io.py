@@ -27,16 +27,25 @@ class GEOSIOTest(SimpleTestCase):
             self.assertEqual(ref, geom)
 
         # Should only accept six.string_types objects.
-        self.assertRaises(TypeError, wkt_r.read, 1)
-        self.assertRaises(TypeError, wkt_r.read, memoryview(b'foo'))
+        with self.assertRaises(TypeError):
+            wkt_r.read(1)
+        with self.assertRaises(TypeError):
+            wkt_r.read(memoryview(b'foo'))
 
     def test02_wktwriter(self):
         # Creating a WKTWriter instance, testing its ptr property.
         wkt_w = WKTWriter()
-        self.assertRaises(TypeError, wkt_w._set_ptr, WKTReader.ptr_type())
+        with self.assertRaises(TypeError):
+            wkt_w._set_ptr(WKTReader.ptr_type())
 
         ref = GEOSGeometry('POINT (5 23)')
         ref_wkt = 'POINT (5.0000000000000000 23.0000000000000000)'
+        self.assertEqual(ref_wkt, wkt_w.write(ref).decode())
+
+    def test_wktwriter_constructor_arguments(self):
+        wkt_w = WKTWriter(dim=3, trim=True, precision=3)
+        ref = GEOSGeometry('POINT (5.34562 23 1.5)')
+        ref_wkt = 'POINT Z (5.35 23 1.5)'
         self.assertEqual(ref_wkt, wkt_w.write(ref).decode())
 
     def test03_wkbreader(self):
@@ -56,7 +65,8 @@ class GEOSIOTest(SimpleTestCase):
 
         bad_input = (1, 5.23, None, False)
         for bad_wkb in bad_input:
-            self.assertRaises(TypeError, wkb_r.read, bad_wkb)
+            with self.assertRaises(TypeError):
+                wkb_r.read(bad_wkb)
 
     def test04_wkbwriter(self):
         wkb_w = WKBWriter()
@@ -75,7 +85,8 @@ class GEOSIOTest(SimpleTestCase):
         # Ensuring bad byteorders are not accepted.
         for bad_byteorder in (-1, 2, 523, 'foo', None):
             # Equivalent of `wkb_w.byteorder = bad_byteorder`
-            self.assertRaises(ValueError, wkb_w._set_byteorder, bad_byteorder)
+            with self.assertRaises(ValueError):
+                wkb_w._set_byteorder(bad_byteorder)
 
         # Setting the byteorder to 0 (for Big Endian)
         wkb_w.byteorder = 0
@@ -96,8 +107,8 @@ class GEOSIOTest(SimpleTestCase):
 
         # Ensuring bad output dimensions are not accepted
         for bad_outdim in (-1, 0, 1, 4, 423, 'foo', None):
-            # Equivalent of `wkb_w.outdim = bad_outdim`
-            self.assertRaises(ValueError, wkb_w._set_outdim, bad_outdim)
+            with self.assertRaisesMessage(ValueError, 'WKB output dimension must be 2 or 3'):
+                wkb_w.outdim = bad_outdim
 
         # Now setting the output dimensions to be 3
         wkb_w.outdim = 3

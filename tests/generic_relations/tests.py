@@ -7,7 +7,6 @@ from django.core.exceptions import FieldError
 from django.db import IntegrityError
 from django.db.models import Q
 from django.test import SimpleTestCase, TestCase
-from django.utils import six
 
 from .models import (
     AllowsNullGFK, Animal, Carrot, Comparison, ConcreteRelatedModel,
@@ -525,8 +524,7 @@ id="id_generic_relations-taggeditem-content_type-object_id-1-id" /></p>""" % tag
     def test_get_or_create(self):
         # get_or_create should work with virtual fields (content_object)
         quartz = Mineral.objects.create(name="Quartz", hardness=7)
-        tag, created = TaggedItem.objects.get_or_create(tag="shiny",
-            defaults={'content_object': quartz})
+        tag, created = TaggedItem.objects.get_or_create(tag="shiny", defaults={'content_object': quartz})
         self.assertTrue(created)
         self.assertEqual(tag.tag, "shiny")
         self.assertEqual(tag.content_object.id, quartz.id)
@@ -535,13 +533,11 @@ id="id_generic_relations-taggeditem-content_type-object_id-1-id" /></p>""" % tag
         # update_or_create should work with virtual fields (content_object)
         quartz = Mineral.objects.create(name="Quartz", hardness=7)
         diamond = Mineral.objects.create(name="Diamond", hardness=7)
-        tag, created = TaggedItem.objects.update_or_create(tag="shiny",
-            defaults={'content_object': quartz})
+        tag, created = TaggedItem.objects.update_or_create(tag="shiny", defaults={'content_object': quartz})
         self.assertTrue(created)
         self.assertEqual(tag.content_object.id, quartz.id)
 
-        tag, created = TaggedItem.objects.update_or_create(tag="shiny",
-            defaults={'content_object': diamond})
+        tag, created = TaggedItem.objects.update_or_create(tag="shiny", defaults={'content_object': diamond})
         self.assertFalse(created)
         self.assertEqual(tag.content_object.id, diamond.id)
 
@@ -590,8 +586,7 @@ class GenericInlineFormsetTest(TestCase):
                 self.instance.saved_by = "custom method"
                 return super(SaveTestForm, self).save(*args, **kwargs)
 
-        Formset = generic_inlineformset_factory(
-            ForProxyModelModel, fields='__all__', form=SaveTestForm)
+        Formset = generic_inlineformset_factory(ForProxyModelModel, fields='__all__', form=SaveTestForm)
 
         instance = ProxyRelatedModel.objects.create()
 
@@ -608,8 +603,7 @@ class GenericInlineFormsetTest(TestCase):
         self.assertEqual(new_obj.saved_by, "custom method")
 
     def test_save_new_for_proxy(self):
-        Formset = generic_inlineformset_factory(ForProxyModelModel,
-            fields='__all__', for_concrete_model=False)
+        Formset = generic_inlineformset_factory(ForProxyModelModel, fields='__all__', for_concrete_model=False)
 
         instance = ProxyRelatedModel.objects.create()
 
@@ -627,8 +621,7 @@ class GenericInlineFormsetTest(TestCase):
         self.assertEqual(new_obj.obj, instance)
 
     def test_save_new_for_concrete(self):
-        Formset = generic_inlineformset_factory(ForProxyModelModel,
-            fields='__all__', for_concrete_model=True)
+        Formset = generic_inlineformset_factory(ForProxyModelModel, fields='__all__', for_concrete_model=True)
 
         instance = ProxyRelatedModel.objects.create()
 
@@ -718,14 +711,11 @@ class ProxyRelatedModelTest(TestCase):
 
 
 class TestInitWithNoneArgument(SimpleTestCase):
-    def test_none_not_allowed(self):
-        # TaggedItem requires a content_type, initializing with None should
-        # raise a ValueError.
-        with six.assertRaisesRegex(self, ValueError,
-          'Cannot assign None: "TaggedItem.content_type" does not allow null values'):
-            TaggedItem(content_object=None)
 
     def test_none_allowed(self):
         # AllowsNullGFK doesn't require a content_type, so None argument should
         # also be allowed.
         AllowsNullGFK(content_object=None)
+        # TaggedItem requires a content_type but initializing with None should
+        # be allowed.
+        TaggedItem(content_object=None)

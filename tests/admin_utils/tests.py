@@ -111,7 +111,8 @@ class UtilsTests(SimpleTestCase):
             def get_admin_value(self, obj):
                 return ADMIN_METHOD
 
-        simple_function = lambda obj: SIMPLE_FUNCTION
+        def simple_function(obj):
+            return SIMPLE_FUNCTION
 
         site_obj = Site(domain=SITE_NAME)
         article = Article(
@@ -203,12 +204,12 @@ class UtilsTests(SimpleTestCase):
             "title"
         )
         self.assertEqual(
-            label_for_field("title2", Article),
-            "another name"
+            label_for_field("hist", Article),
+            "History"
         )
         self.assertEqual(
-            label_for_field("title2", Article, return_attr=True),
-            ("another name", None)
+            label_for_field("hist", Article, return_attr=True),
+            ("History", None)
         )
 
         self.assertEqual(
@@ -220,10 +221,8 @@ class UtilsTests(SimpleTestCase):
             str("article")
         )
 
-        self.assertRaises(
-            AttributeError,
-            lambda: label_for_field("unknown", Article)
-        )
+        with self.assertRaises(AttributeError):
+            label_for_field("unknown", Article)
 
         def test_callable(obj):
             return "nothing"
@@ -264,9 +263,7 @@ class UtilsTests(SimpleTestCase):
             "not Really the Model"
         )
         self.assertEqual(
-            label_for_field("test_from_model", Article,
-                model_admin=MockModelAdmin,
-                return_attr=True),
+            label_for_field("test_from_model", Article, model_admin=MockModelAdmin, return_attr=True),
             ("not Really the Model", MockModelAdmin.test_from_model)
         )
 

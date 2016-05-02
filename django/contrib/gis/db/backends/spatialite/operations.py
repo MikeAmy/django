@@ -96,7 +96,7 @@ class SpatiaLiteOperations(BaseSpatialOperations, DatabaseOperations):
 
     @cached_property
     def unsupported_functions(self):
-        unsupported = {'BoundingCircle', 'ForceRHR', 'MemSize'}
+        unsupported = {'BoundingCircle', 'ForceRHR', 'IsValid', 'MakeValid', 'MemSize'}
         if self.spatial_version < (3, 1, 0):
             unsupported.add('SnapToGrid')
         if self.spatial_version < (4, 0, 0):
@@ -142,7 +142,7 @@ class SpatiaLiteOperations(BaseSpatialOperations, DatabaseOperations):
 
     def geo_db_type(self, f):
         """
-        Returns None because geometry columnas are added via the
+        Returns None because geometry columns are added via the
         `AddGeometryColumn` stored procedure on SpatiaLite.
         """
         return None

@@ -14,7 +14,7 @@ This document contains all the API references of :class:`Field` including the
 
     If the built-in fields don't do the trick, you can try `django-localflavor
     <https://github.com/django/django-localflavor>`_ (`documentation
-    <https://django-localflavor.readthedocs.org/>`_), which contains assorted
+    <https://django-localflavor.readthedocs.io/>`_), which contains assorted
     pieces of code that are useful for particular countries and cultures.
 
     Also, you can easily :doc:`write your own custom model fields
@@ -415,7 +415,8 @@ guaranteed to fit numbers from ``-9223372036854775808`` to
 
 A field to store raw binary data. It only supports ``bytes`` assignment. Be
 aware that this field has limited functionality. For example, it is not possible
-to filter a queryset on a ``BinaryField`` value.
+to filter a queryset on a ``BinaryField`` value. It is also not possible to
+include a ``BinaryField`` in a :class:`~django.forms.ModelForm`.
 
 .. admonition:: Abusing ``BinaryField``
 
@@ -471,11 +472,16 @@ The default form widget for this field is a :class:`~django.forms.TextInput`.
     of. Refer to the :ref:`MySQL database notes <mysql-collation>` for
     details.
 
-
 ``CommaSeparatedIntegerField``
 ------------------------------
 
 .. class:: CommaSeparatedIntegerField(max_length=None, **options)
+
+.. deprecated:: 1.9
+
+    This field is deprecated in favor of :class:`~django.db.models.CharField`
+    with ``validators=[``\ :func:`validate_comma_separated_integer_list
+    <django.core.validators.validate_comma_separated_integer_list>`\ ``]``.
 
 A field of integers separated by commas. As in :class:`CharField`, the
 :attr:`~CharField.max_length` argument is required and the note about database
@@ -494,6 +500,12 @@ optional arguments:
     Automatically set the field to now every time the object is saved. Useful
     for "last-modified" timestamps. Note that the current date is *always*
     used; it's not just a default value that you can override.
+
+    The field is only automatically updated when calling :meth:`Model.save()
+    <django.db.models.Model.save>`. The field isn't updated when making updates
+    to other fields in other ways such as :meth:`QuerySet.update()
+    <django.db.models.query.QuerySet.update>`, though you can specify a custom
+    value for the field in an update like that.
 
 .. attribute:: DateField.auto_now_add
 
@@ -743,8 +755,8 @@ equivalent to XSS or CSRF attacks.
 columns with a default max length of 100 characters. As with other fields, you
 can change the maximum length using the :attr:`~CharField.max_length` argument.
 
-FileField and FieldFile
-~~~~~~~~~~~~~~~~~~~~~~~
+``FileField`` and ``FieldFile``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. currentmodule:: django.db.models.fields.files
 
@@ -921,7 +933,7 @@ optional arguments:
 
 Requires the `Pillow`_ library.
 
-.. _Pillow: https://pillow.readthedocs.org/en/latest/
+.. _Pillow: https://pillow.readthedocs.io/en/latest/
 
 :class:`ImageField` instances are created in your database as ``varchar``
 columns with a default max length of 100 characters. As with other fields, you
@@ -1151,6 +1163,35 @@ you can use the name of the model, rather than the model object itself::
         # ...
         pass
 
+Relationships defined this way on :ref:`abstract models
+<abstract-base-classes>` are resolved when the model is subclassed as a
+concrete model and are not relative to the abstract model's ``app_label``:
+
+.. snippet::
+    :filename: products/models.py
+
+    from django.db import models
+
+    class AbstractCar(models.Model):
+        manufacturer = models.ForeignKey('Manufacturer', on_delete=models.CASCADE)
+
+        class Meta:
+            abstract = True
+
+.. snippet::
+    :filename: production/models.py
+
+    from django.db import models
+    from products.models import AbstractCar
+
+    class Manufacturer(models.Model):
+        pass
+
+    class Car(AbstractCar):
+        pass
+
+    # Car.manufacturer will point to `production.Manufacturer` here.
+
 To refer to models defined in another application, you can explicitly specify
 a model with the full application label. For example, if the ``Manufacturer``
 model above is defined in another application called ``production``, you'd
@@ -1327,8 +1368,9 @@ The possible values for :attr:`~ForeignKey.on_delete` are found in
 
 .. attribute:: ForeignKey.related_query_name
 
-    The name to use for the reverse filter name from the target model.
-    Defaults to the value of :attr:`related_name` if it is set, otherwise it
+    The name to use for the reverse filter name from the target model. It
+    defaults to the value of :attr:`related_name` or
+    :attr:`~django.db.models.Options.default_related_name` if set, otherwise it
     defaults to the name of the model::
 
         # Declare the ForeignKey with related_query_name
@@ -1343,6 +1385,9 @@ The possible values for :attr:`~ForeignKey.on_delete` are found in
 
         # That's now the name of the reverse filter
         Article.objects.filter(tag__name="important")
+
+    Like :attr:`related_name`, ``related_query_name`` supports app label and
+    class interpolation via :ref:`some special syntax <abstract-related-name>`.
 
 .. attribute:: ForeignKey.to_field
 
@@ -1382,8 +1427,6 @@ The possible values for :attr:`~ForeignKey.on_delete` are found in
     support, for example).
 
     If in doubt, leave it to its default of ``True``.
-
-.. _ref-manytomany:
 
 ``ManyToManyField``
 -------------------
@@ -1587,8 +1630,6 @@ that control how the relationship functions.
 
 :attr:`~Field.null` has no effect since there is no way to require a
 relationship at the database level.
-
-.. _ref-onetoone:
 
 ``OneToOneField``
 -----------------
@@ -1812,15 +1853,8 @@ Field API reference
     .. method:: get_prep_lookup(lookup_type, value)
 
         Prepares ``value`` to the database prior to be used in a lookup.
-        The ``lookup_type`` will be one of the valid Django filter lookups:
-        ``"exact"``, ``"iexact"``, ``"contains"``, ``"icontains"``,
-        ``"gt"``, ``"gte"``, ``"lt"``, ``"lte"``, ``"in"``, ``"startswith"``,
-        ``"istartswith"``, ``"endswith"``, ``"iendswith"``, ``"range"``,
-        ``"year"``, ``"month"``, ``"day"``, ``"isnull"``, ``"search"``,
-        ``"regex"``, and ``"iregex"``.
-
-        If you are using :doc:`Custom lookups </ref/models/lookups>` the
-        ``lookup_type`` can be any ``lookup_name`` registered in the field.
+        The ``lookup_type`` will be the registered name of the lookup. For
+        example: ``"exact"``, ``"iexact"``, or ``"contains"``.
 
         See :ref:`preparing-values-for-use-in-database-lookups` for usage.
 
